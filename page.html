@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Calculator</title>
+    <style>
+        body {
+            display: flex;
+        }
+
+        table {
+            border-collapse: collapse;
+            /* width: 20%; */
+            margin: 10px 0;
+        }
+
+        .contain {
+            margin: 10px 0;
+        }
+
+        th,
+        td {
+            border: 1px solid black;
+            padding: 6px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            white-space: nowarp;
+        }
+
+        .ret,
+        .vari {
+            width: 40%;
+        }
+
+        #results {
+            margin-left: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div>
+        <h2>Investment Portfolio</h2>
+
+        <table id="investmentTable">
+            <tr>
+                <th>종목</th>
+                <th>기대 수익률(%)</th>
+                <th>위험도</th>
+            </tr>
+        </table>
+
+        <div id="modifyInv" class="contain">
+            <button onclick="addInv()">추가</button>
+            <button onclick="removeInv()">제거</button>
+        </div>
+
+        <div class="contain">
+            <label for="riskThreshold">한계 위험도:</label>
+            <input type="number" id="riskThreshold" step="1"><br>
+            <button onclick="calculate()" class="contain">계산</button>
+            <h4 id="resultText"></h4>
+        </div>
+    </div>
+
+
+    <div id="results">
+        <canvas id="chart" width="300" height="300"></canvas>
+    </div>
+
+
+    <script>
+        let N = 0;
+        const Total = 10000;
+
+        // 기본값 설정
+        const initInvs = [
+            { ret: 3.6, vari: 15 },
+            { ret: 6.3, vari: 26 },
+            { ret: 5.8, vari: 24 },
+            { ret: 2.5, vari: 20 },
+            { ret: 3.6, vari: 22 }
+        ];
+        const initR = 10;
+
+        const bgColors= [
+            'rgba(255, 99, 132, 0.2)',
+            'rgba(54, 162, 235, 0.2)',
+            'rgba(255, 206, 86, 0.2)',
+            'rgba(75, 192, 192, 0.2)',
+            'rgba(153, 102, 255, 0.2)',
+            'rgba(255, 159, 64, 0.2)',
+            'rgba(255, 99, 132, 0.2)',
+            'rgba(54, 162, 235, 0.2)',
+            'rgba(255, 206, 86, 0.2)',
+        ];
+        const bgGray = 'rgba(128, 128, 128, 0.2)';
+        const bdColors = [
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)',
+            'rgba(255, 99, 132, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 206, 86, 1)',
+        ];
+        const bdGray = 'rgba(128, 128, 128, 1)';
+
+        // 초기값 설정
+        window.onload = function () {
+            for (const inv of initInvs) {
+                addInv(inv.ret, inv.vari);
+            }
+            document.getElementById('riskThreshold').value = initR;
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [...bgColors, bgGray],
+                        borderColor: [...bdColors, bdGray],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        // 새로운 플러그인 추가
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            formatter: function (value, context) {
+                                return value + '%'; // 데이터 값에 '%' 추가
+                            }
+                        }
+                    }
+                }
+
+            });
+        };
+
+        function addInv(ret = 5.0, vari = 30) {
+            if (N > 8) return;
+            N++;
+            const table = document.getElementById('investmentTable');
+            const row = table.insertRow(N);
+            const cell1 = row.insertCell(0);
+            const cell2 = row.insertCell(1);
+            const cell3 = row.insertCell(2);
+            cell1.innerHTML = N;
+            cell2.innerHTML = `<input type="number" id="ret${N}" class="ret" value="${ret}" step="0.01">`;
+            cell3.innerHTML = `<input type="number" id="vari${N}" class="vari" value="${vari}" step="1">`;
+        }
+
+        function removeInv() {
+            if (N > 1) {
+                document.getElementById('investmentTable').deleteRow(N);
+                N--;
+            }
+        }
+
+        function calculate() {
+            const R = parseInt(document.getElementById('riskThreshold').value) * Total;
+
+            let returns = [];
+            let variances = [];
+            for (let i = 1; i <= N; i++) {
+                const ret = parseFloat(document.getElementById(`ret${i}`).value);
+                const vari = parseFloat(document.getElementById(`vari${i}`).value);
+                returns.push(ret);
+                variances.push(vari);
+            }
+
+            console.log(R, returns, variances);
+            let investments = unboundedKnapsack(returns, variances, R, Total)
+            console.log(investments);
+
+            let maxReturn = investments.reduce((sum, count, index) => sum + count * returns[index], 0);
+            let totalRisk = investments.reduce((sum, count, index) => sum + count * variances[index], 0)
+
+            displayResults(maxReturn, investments, totalRisk);
+        }
+
+        function unboundedKnapsack(returns, variances, R, maxCount) {
+            const dp = new Array(R + 1).fill(0);
+            const itemCounts = new Array(R + 1).fill(null).map(() => new Array(N).fill(0));
+
+            for (let i = 0; i <= R; i++) {
+                for (let j = 0; j < N; j++) {
+                    if (variances[j] <= i) {
+                        let newReturn = dp[i - variances[j]] + returns[j];
+                        if (dp[i] < newReturn && itemCounts[i - variances[j]].reduce((a, b) => a + b, 0) < maxCount) {
+                            dp[i] = newReturn;
+                            itemCounts[i] = itemCounts[i - variances[j]].slice();
+                            itemCounts[i][j]++;
+                        }
+                    }
+                }
+            }
+
+            // Find the maximum returns sum and its corresponding item counts
+            let maxReturnIndex = 0;
+            for (let i = 0; i <= R; i++) {
+                if (dp[i] > dp[maxReturnIndex]) {
+                    maxReturnIndex = i;
+                }
+            }
+
+            console.log(itemCounts)
+
+            return itemCounts[maxReturnIndex];
+        }
+
+
+        function displayResults(maxReturn, investments, totalRisk) {
+            const labels = [];
+            const data = [];
+            rest = Total;
+            for (let i = 0; i < investments.length; i++) {
+                labels.push(`${i + 1}`); // 종목 레이블에 투자 비율 추가
+                data.push(investments[i] / 100);
+                rest -= investments[i];
+            }
+            labels.push("투자 안함");
+            data.push(rest / 100);
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.data.datasets[0].backgroundColor = [...bgColors.slice(0, N), bgGray]
+            chart.data.datasets[0].borderColor = [...bdColors.slice(0, N), bdGray]
+            chart.update();
+
+            document.getElementById('resultText').innerHTML = `<h4>기대 수익률: ${parseInt(maxReturn * 100 / Total) / 100} %</h4><h4>평균 위험도: ${parseInt(totalRisk * 100 / Total) / 100}</h4>`;
+        }
+
+
+
+    </script>
+
+
+
+</body>
+
+</html>
